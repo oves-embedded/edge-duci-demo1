@@ -33,87 +33,21 @@
  * ------------------------------------------------------------------------------------------------------------------------------------------------
 */
 
-#include   "usart3.h"
-#include   "..\SYSTEM\SIM868.h"
-
-//#include "main.h"
+#include "MQTTSim800.h"
+#include "main.h"
 #include "usart.h"
 #include <string.h>
-
-#include "..\MQTTSim800\MQTTSim800.h"
-
-#include "..\MQTT\MQTTPacket.h"
+#include "MQTTPacket.h"
 
 #if FREERTOS == 1
 #include <cmsis_os.h>
 #endif
 
-
-SIM800_t SIM800;
-
-void InitSim800(void)
-{
-
-    SIM800.sim.apn = "CMNET";
-    SIM800.sim.apn_user = "";
-    SIM800.sim.apn_pass = "";
-    SIM800.mqttServer.host = "mqtt-2.omnivoltaic.com";
-    SIM800.mqttServer.port = 1883;
-    SIM800.mqttClient.username = "Wisdon";
-    SIM800.mqttClient.pass = "123456";
-    SIM800.mqttClient.clientID = "TestSub";
-    SIM800.mqttClient.keepAliveInterval = 120;	
-	
-};
-
-void HAL_Delay(int delay)
-{
-	 delay_ms(1000);   
-	 delay_ms(500);   
-}
-
-typedef int UART_HandleTypeDef ;
-
-
-void clearRxBuffer(void) {
-    //rx_index = 0;
-   // memset(rx_buffer, 0, sizeof(rx_buffer));
-	 Uart3.ClearRxBuff();
-}
-
-int  HAL_UART_Transmit_IT(int huart, uint8_t *pData, uint16_t Size)
-{
-	
-	int re=Uart3.SendData(pData,Size,1000);
-	
-	return re;
-}
-
-int HAL_UART_Receive_IT(int huart, uint8_t *pData, uint16_t Size)
-{
-	
-	  int re=Uart3.Receive( pData,Size,1000);
-		return re;
-}
-
-int UART_SIM800=3;
-
-
-//SIM800.sim.apn="internet";
-//SIM800.sim.apn_user = "";
-//SIM800.sim.apn_pass = "";
-//SIM800.mqttServer.host = "mqtt.mqtt.ru";
-//SIM800.mqttServer.port = 1883;
-//SIM800.mqttClient.username = "user";
-//SIM800.mqttClient.pass = "pass";
-//SIM800.mqttClient.clientID = "TestSub";
-//SIM800.mqttClient.keepAliveInterval = 120;
+extern SIM800_t SIM800;
 
 uint8_t rx_data = 0;
-//uint8_t rx_buffer[1460] = {0};
-//uint16_t rx_index = 0;
-
-//char* mqtt_buffer =Uart3.
+uint8_t rx_buffer[1460] = {0};
+uint16_t rx_index = 0;
 
 uint8_t mqtt_receive = 0;
 char mqtt_buffer[1460] = {0};
@@ -124,7 +58,6 @@ uint16_t mqtt_index = 0;
  * @param NONE
  * @return NONE
  */
-/*
 void Sim800_RxCallBack(void) {
     rx_buffer[rx_index++] = rx_data;
 
@@ -164,20 +97,16 @@ void Sim800_RxCallBack(void) {
     }
     HAL_UART_Receive_IT(UART_SIM800, &rx_data, 1);
 }
-*/
 
 /**
  * Clear SIM800 UART RX buffer.
  * @param NONE
  * @return NONE
  */
-
-/*
 void clearRxBuffer(void) {
     rx_index = 0;
     memset(rx_buffer, 0, sizeof(rx_buffer));
 }
-*/
 
 /**
  * Clear MQTT buffer.
@@ -198,40 +127,20 @@ void clearMqttBuffer(void) {
  * @return error, 0 is OK
  */
 int SIM800_SendCommand(char *command, char *reply, uint16_t delay) {
-
-
-	  HAL_UART_Transmit_IT(UART_SIM800, (unsigned char *) command,  (uint16_t) strlen(command));
+    HAL_UART_Transmit_IT(UART_SIM800, (unsigned char *) command,
+                         (uint16_t) strlen(command));
 
 #if FREERTOS == 1
     osDelay(delay);
 #else
     HAL_Delay(delay);
-	 
-	  if(delay>=3000)
-		{
-			HAL_Delay(1000);			
-			HAL_Delay(1000);		
-			HAL_Delay(1000);		
-			HAL_Delay(1000);			
-			HAL_Delay(1000);		
-			HAL_Delay(1000);				
-		}
 #endif
-    
-		memcpy(mqtt_buffer, Uart3._Rxbuf,Uart3._RxNum  );
-		
+
     if (strstr(mqtt_buffer, reply) != NULL) {
         clearRxBuffer();
-			  clearMqttBuffer();
-			  //for debug
-			  USART_DEBUG_SendStr(command);  USART_DEBUG_SendStr("=OK\r\n");	
-			
         return 0;
     }
-		
-		USART_DEBUG_SendStr(command);  USART_DEBUG_SendStr("=OK\r\n");		
     clearRxBuffer();
-		clearMqttBuffer();
     return 1;
 }
 
@@ -244,28 +153,20 @@ int MQTT_Init(void) {
     SIM800.mqttServer.connect = 0;
     int error = 0;
     char str[32] = {0};
-//    HAL_UART_Receive_IT(UART_SIM800, &rx_data, 1);
-//*
-    SIM800_SendCommand("AT\r\n", "OK\r\n", CMD_DELAY/2);
-    SIM800_SendCommand("ATE0\r\n", "OK\r\n", CMD_DELAY/2);
+    HAL_UART_Receive_IT(UART_SIM800, &rx_data, 1);
+
+    SIM800_SendCommand("AT\r\n", "OK\r\n", CMD_DELAY);
+    SIM800_SendCommand("ATE0\r\n", "OK\r\n", CMD_DELAY);
     error += SIM800_SendCommand("AT+CIPSHUT\r\n", "SHUT OK\r\n", CMD_DELAY);
-    error += SIM800_SendCommand("AT+CGATT?\r\n", "OK\r\n", CMD_DELAY);
-    error += SIM800_SendCommand("AT+CIPMODE=1\r\n", "OK\r\n", CMD_DELAY/2);
+    error += SIM800_SendCommand("AT+CGATT=1\r\n", "OK\r\n", CMD_DELAY);
+    error += SIM800_SendCommand("AT+CIPMODE=1\r\n", "OK\r\n", CMD_DELAY);
 
     snprintf(str, sizeof(str), "AT+CSTT=\"%s\",\"%s\",\"%s\"\r\n", SIM800.sim.apn, SIM800.sim.apn_user,
              SIM800.sim.apn_pass);
-		
     error += SIM800_SendCommand(str, "OK\r\n", CMD_DELAY);
 
-		SIM800_SendCommand("AT+CIICR\r\n", "OK\r\n", CMD_DELAY*3);
-    //error += SIM800_SendCommand("AT+CIICR\r\n", "OK\r\n", CMD_DELAY*3);
+    error += SIM800_SendCommand("AT+CIICR\r\n", "OK\r\n", CMD_DELAY);
     SIM800_SendCommand("AT+CIFSR\r\n", "", CMD_DELAY);
-		
-//*/
-//		Omnivoltaic_GPRSConnctTcp("1",1883);
-		
-//		SIM800.mqttServer.connect=1;
-		
     if (error == 0) {
         MQTT_Connect();
         return error;
@@ -280,17 +181,12 @@ int MQTT_Init(void) {
  * @return NONE
  */
 void MQTT_Connect(void) {
-	
-	  int serverok=0;
     SIM800.mqttReceive.newEvent = 0;
-  //  SIM800.mqttServer.connect = 0;
+    SIM800.mqttServer.connect = 0;
     char str[128] = {0};
     unsigned char buf[128] = {0};
-  //  sprintf(str, "AT+CIPSTART=\"TCP\",\"%s\",%d\r\n", SIM800.mqttServer.host, SIM800.mqttServer.port);
-   // serverok= SIM800_SendCommand(str, "CONNECT OK\r\n", CMD_DELAY);
-		
-	//	SIM800.mqttServer.connect=serverok;
-		
+    sprintf(str, "AT+CIPSTART=\"TCP\",\"%s\",%d\r\n", SIM800.mqttServer.host, SIM800.mqttServer.port);
+    SIM800_SendCommand(str, "OK\r\n", CMD_DELAY);
 #if FREERTOS == 1
     osDelay(5000);
 #else
@@ -327,11 +223,6 @@ void MQTT_Pub(char *topic, char *payload) {
 
     int mqtt_len = MQTTSerialize_publish(buf, sizeof(buf), 0, 0, 0, 0,
                                          topicString, (unsigned char *) payload, (int) strlen(payload));
-		
-		
-		Uart1_SendData2(buf,mqtt_len,1);//for debug
-		
-		
     HAL_UART_Transmit_IT(UART_SIM800, buf, mqtt_len);
 }
 
@@ -360,7 +251,6 @@ void MQTT_Sub(char *topic) {
 
     int mqtt_len = MQTTSerialize_subscribe(buf, sizeof(buf), 0, 1, 1,
                                            &topicString, 0);
-		
     HAL_UART_Transmit_IT(UART_SIM800, buf, mqtt_len);
 #if FREERTOS == 1
     osDelay(5000);
@@ -388,4 +278,3 @@ void MQTT_Receive(unsigned char *buf) {
     memcpy(SIM800.mqttReceive.payload, payload, SIM800.mqttReceive.payloadLen);
     SIM800.mqttReceive.newEvent = 1;
 }
-
